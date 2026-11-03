@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pharmaflow
+      POSTGRES_USER: pharmaflow
+      POSTGRES_PASSWORD: pharmaflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharmaflow"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      PF_DATABASE_URL: postgresql+psycopg://pharmaflow:pharmaflow@db:5432/pharmaflow
+      PF_SIM_AUTOSTART: "true"
+      PF_SIM_SPEED: "10"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,18 @@
+[project]
+name = "pharmaflow"
+version = "0.1.0"
+description = "WMS and digital twin of an automated pharmacy distribution warehouse"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# B008: FastAPI's Depends()/Query() in defaults is the framework's intended pattern
+ignore = ["B008"]
