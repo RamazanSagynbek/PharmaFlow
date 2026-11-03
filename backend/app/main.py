@@ -1,9 +1,11 @@
 """PharmaFlow WMS: FastAPI application."""
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app import models  # noqa: F401  (register tables)
 from app.api import routes, ws
@@ -35,8 +37,10 @@ async def lifespan(app: FastAPI):
     app.state.runner = runner
     if settings.sim_autostart:
         runner.start()
+    if settings.sim_loop:
+        runner.start_loop()
     yield
-    await runner.stop()
+    await runner.shutdown()
 
 
 app = FastAPI(
@@ -50,3 +54,8 @@ app = FastAPI(
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(routes.router)
 app.include_router(ws.router)
+
+# HMI (built React app). Mounted last so /api and /ws keep priority.
+HMI_DIR = Path(__file__).parent / "static"
+if (HMI_DIR / "index.html").exists():
+    app.mount("/", StaticFiles(directory=HMI_DIR, html=True), name="hmi")

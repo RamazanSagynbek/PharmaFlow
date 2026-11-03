@@ -138,3 +138,30 @@ def test_websocket_sends_snapshot(client):
         msg = ws.receive_json()
     assert msg["type"] == "hello"
     assert "queues" in msg["snapshot"]
+
+
+def test_paused_conveyor_still_shows_new_totes(client):
+    runner = client.app.state.runner
+    assert not runner.running
+    auto, _ = first_auto_and_manual_sku(client)
+    client.post("/api/orders", json={"pharmacy_code": "APT-001", "lines": [{"sku": auto, "qty": 2}]})
+    runner.tick(0.0)  # what the loop does while STOP is pressed
+    totes = runner.sim.snapshot()["totes"]
+    assert len(totes) == 1 and totes[0]["stage"] == "queued"
+    msg = runner.state_message()
+    assert msg["running"] is False and "speed" in msg
+
+
+def test_start_stop_endpoints(client):
+    assert client.post("/api/sim/start").json() == {"running": True}
+    assert client.app.state.runner.running
+    assert client.post("/api/sim/stop").json() == {"running": False}
+
+
+def test_tote_detail_has_product_and_pharmacy(client):
+    _, manual = first_auto_and_manual_sku(client)
+    order = client.post("/api/orders", json={"pharmacy_code": "APT-004",
+                                             "lines": [{"sku": manual, "qty": 1}]}).json()
+    detail = client.get(f"/api/totes/{order['totes'][0]['barcode']}").json()
+    assert detail["pharmacy_code"] == "APT-004"
+    assert detail["items"][0]["product_name"]

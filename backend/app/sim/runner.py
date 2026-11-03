@@ -89,6 +89,8 @@ class SimulationRunner:
                 barcode=tote.barcode, order_id=tote.order_id, dock=tote.dock,
                 auto_units=sum(i.qty for i in auto),
                 manual_lines=len(manual), manual_units=sum(i.qty for i in manual),
+                has_cold=any(i.order_line.product.is_cold for i in tote.items),
+                has_rx=any(i.order_line.product.is_rx for i in tote.items),
             ))
             tote.status = ToteStatus.IN_PROCESS
             if tote.order.status == OrderStatus.ALLOCATED:
@@ -123,29 +125,53 @@ class SimulationRunner:
             ))
 
     # ------------------------------------------------------------ async loop
+    #
+    # The loop runs for the whole lifetime of the app so the HMI always gets
+    # fresh state. `running` only controls whether the conveyor moves: while
+    # stopped, new totes are still loaded and appear at the start zone.
 
     def start(self) -> None:
-        if self.running:
-            return
+        """Conveyor START (the button on the HMI)."""
         self.running = True
-        self._task = asyncio.create_task(self._loop())
 
-    async def stop(self) -> None:
+    def stop(self) -> None:
+        """Conveyor STOP: everything freezes in place."""
+        self.running = False
+
+    def start_loop(self) -> None:
+        if self._task is None:
+            self._task = asyncio.create_task(self._loop())
+
+    async def shutdown(self) -> None:
         self.running = False
         if self._task:
-            await self._task
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
             self._task = None
 
+    def state_message(self, events: list[SimEvent] | None = None, type_: str = "tick") -> dict:
+        return {
+            "type": type_,
+            "running": self.running,
+            "speed": self.speed,
+            "snapshot": self.sim.snapshot(),
+            "events": [
+                {**e.as_dict(), "message": _MESSAGES.get(e.type, e.type)} for e in (events or [])
+            ],
+        }
+
     async def _loop(self) -> None:
-        while self.running:
+        while True:
             try:
-                events = await asyncio.to_thread(self.tick, self.tick_seconds * self.speed)
+                sim_seconds = self.tick_seconds * self.speed if self.running else 0.0
+                events = await asyncio.to_thread(self.tick, sim_seconds)
                 if self.broadcast:
-                    await self.broadcast({
-                        "type": "tick",
-                        "snapshot": self.sim.snapshot(),
-                        "events": [e.as_dict() for e in events],
-                    })
+                    await self.broadcast(self.state_message(events))
+            except asyncio.CancelledError:
+                raise
             except Exception:  # keep the warehouse running, but make the failure visible
                 log.exception("simulation tick failed")
             await asyncio.sleep(self.tick_seconds)

@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     min_shelf_days: int = 90         # pharmacies do not accept stock expiring sooner
 
     # Simulation
-    sim_autostart: bool = False
+    sim_autostart: bool = False      # conveyor starts moving on launch
+    sim_loop: bool = True            # background tick loop (disabled in tests)
     sim_tick_seconds: float = 0.2    # real time between ticks
     sim_speed: float = 5.0           # simulated seconds per real second
     scanner_noread_rate: float = 0.03

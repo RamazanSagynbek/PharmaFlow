@@ -63,6 +63,9 @@ class OrderLineOut(ORM):
 
 class ToteItemOut(ORM):
     sku: str
+    product_name: str
+    is_rx: bool
+    is_cold: bool
     batch_series: str
     batch_expiry: date
     qty: int
@@ -82,6 +85,8 @@ class ToteOut(ORM):
 
 
 class ToteDetailOut(ToteOut):
+    pharmacy_code: str
+    pharmacy_name: str
     items: list[ToteItemOut]
 
 

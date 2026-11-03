@@ -92,3 +92,24 @@ def test_adding_same_tote_twice_is_ignored():
     sim.add_tote(tote(1))
     sim.add_tote(tote(1))
     assert sim.active_count == 1
+
+
+def test_snapshot_exposes_hmi_details():
+    sim = make_sim(noread_rate=0, induction_interval=0.5, manual_per_line=60)
+    for n in range(1, 5):
+        sim.add_tote(tote(n, auto=0, manual_lines=1))
+    sim.step(30)
+    snap = sim.snapshot()
+    picking = [t for t in snap["totes"] if t["stage"] == "manual_pick"]
+    waiting = sorted(t["queue_pos"] for t in snap["totes"] if t["stage"] == "manual_wait")
+    assert sorted(t["slot"] for t in picking) == [0, 1]          # each picker has its own bay
+    assert waiting == list(range(len(waiting)))                  # queue positions 0..n-1
+    assert sorted(snap["equipment"]["manual"]) == [0, 1]
+
+
+def test_picker_slot_is_released_and_reused():
+    sim = make_sim(noread_rate=0, induction_interval=0.5, manual_workers=1, manual_per_line=5)
+    for n in range(1, 4):
+        sim.add_tote(tote(n, auto=0, manual_lines=1))
+    slots = [e.detail["slot"] for e in sim.run_until_idle() if e.type == "manual_start"]
+    assert slots == [0, 0, 0]

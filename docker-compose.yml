@@ -13,7 +13,7 @@ services:
       retries: 10
 
   api:
-    build: ./backend
+    build: .
     environment:
       PF_DATABASE_URL: postgresql+psycopg://pharmaflow:pharmaflow@db:5432/pharmaflow
       PF_SIM_AUTOSTART: "true"

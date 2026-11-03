@@ -136,11 +136,18 @@ def _tote_by_barcode(db: Session, barcode: str) -> Tote:
 def get_tote(barcode: str, db: Session = Depends(get_db)):
     tote = _tote_by_barcode(db, barcode)
     items = [
-        ToteItemOut(sku=i.batch.product.sku, batch_series=i.batch.series, batch_expiry=i.batch.expiry,
-                    qty=i.qty, zone=i.zone, picked=i.picked)
+        ToteItemOut(
+            sku=i.batch.product.sku, product_name=i.batch.product.name, is_rx=i.batch.product.is_rx,
+            is_cold=i.batch.product.is_cold, batch_series=i.batch.series, batch_expiry=i.batch.expiry,
+            qty=i.qty, zone=i.zone, picked=i.picked,
+        )
         for i in tote.items
     ]
-    return ToteDetailOut(**ToteOut.model_validate(tote).model_dump(), items=items)
+    pharmacy = tote.order.pharmacy
+    return ToteDetailOut(
+        **ToteOut.model_validate(tote).model_dump(),
+        pharmacy_code=pharmacy.code, pharmacy_name=pharmacy.name, items=items,
+    )
 
 
 @router.post("/totes/{barcode}/resolve", response_model=ToteOut)
@@ -185,14 +192,14 @@ def sim_state(runner: SimulationRunner = Depends(get_runner)):
 
 
 @router.post("/sim/start")
-async def sim_start(runner: SimulationRunner = Depends(get_runner)):
+def sim_start(runner: SimulationRunner = Depends(get_runner)):
     runner.start()
     return {"running": True}
 
 
 @router.post("/sim/stop")
-async def sim_stop(runner: SimulationRunner = Depends(get_runner)):
-    await runner.stop()
+def sim_stop(runner: SimulationRunner = Depends(get_runner)):
+    runner.stop()
     return {"running": False}
 
 

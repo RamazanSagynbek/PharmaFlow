@@ -91,6 +91,9 @@ class SimTote:
     remaining: float = 0.0
     duration: float = 0.0
     recirculations: int = 0
+    slot: int | None = None  # picker workstation index while in MANUAL_PICK
+    has_cold: bool = False   # contains +2..+8 °C items (shown on the HMI)
+    has_rx: bool = False     # contains prescription-only items
 
     @property
     def zone(self) -> str:
@@ -182,16 +185,30 @@ class WarehouseSim:
 
     def snapshot(self) -> dict:
         elapsed = max(self.t, 1e-9)
+        # Position of each waiting tote in its queue (0 = next in line), used by the HMI
+        queue_pos: dict[str, int] = {}
+        for queue in (self._induction, self._auto_queue, self._manual_queue, *self._dock_queues.values()):
+            for i, waiting in enumerate(queue):
+                queue_pos[waiting.barcode] = i
         return {
             "t": round(self.t, 1),
             "totes": [
                 {
                     "barcode": t.barcode, "order_id": t.order_id, "stage": t.stage.value,
                     "zone": t.zone, "progress": t.progress, "dock": t.dock,
-                    "recirculations": t.recirculations,
+                    "recirculations": t.recirculations, "slot": t.slot,
+                    "queue_pos": queue_pos.get(t.barcode),
+                    "auto_units": t.auto_units, "manual_units": t.manual_units,
+                    "has_cold": t.has_cold, "has_rx": t.has_rx,
                 }
                 for t in self.totes.values()
             ],
+            "equipment": {
+                "auto": self._auto_busy.barcode if self._auto_busy else None,
+                "manual": [t.slot for t in self._manual_busy],
+                "manual_workers": self.cfg.manual_workers,
+                "docks": {d: (t.barcode if t else None) for d, t in self._dock_busy.items()},
+            },
             "queues": {
                 "start": len(self._induction),
                 "auto": len(self._auto_queue),
@@ -265,6 +282,7 @@ class WarehouseSim:
                     self._start(tote, Stage.TO_SORTER, cfg.travel_to_sorter)
             case Stage.MANUAL_PICK:
                 self._manual_busy.remove(tote)
+                tote.slot = None
                 self.stats.units_manual += tote.manual_units
                 self._emit("manual_done", tote, lines=tote.manual_lines, units=tote.manual_units)
                 self._start(tote, Stage.TO_SORTER, cfg.travel_to_sorter)
@@ -309,10 +327,12 @@ class WarehouseSim:
 
         while len(self._manual_busy) < cfg.manual_workers and self._manual_queue:
             tote = self._manual_queue.popleft()
+            busy_slots = {t.slot for t in self._manual_busy}
+            tote.slot = next(i for i in range(cfg.manual_workers) if i not in busy_slots)
             self._manual_busy.append(tote)
             duration = cfg.manual_per_line * tote.manual_lines + cfg.manual_per_unit * tote.manual_units
             self._start(tote, Stage.MANUAL_PICK, duration)
-            self._emit("manual_start", tote, lines=tote.manual_lines)
+            self._emit("manual_start", tote, lines=tote.manual_lines, slot=tote.slot)
 
         for dock, queue in self._dock_queues.items():
             if self._dock_busy[dock] is None and queue:

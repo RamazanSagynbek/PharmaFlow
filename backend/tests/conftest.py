@@ -3,6 +3,7 @@ import os
 # In-memory SQLite by default; CI also runs the suite against PostgreSQL via PF_TEST_DATABASE_URL.
 os.environ["PF_DATABASE_URL"] = os.environ.get("PF_TEST_DATABASE_URL", "sqlite://")
 os.environ["PF_SIM_AUTOSTART"] = "false"
+os.environ["PF_SIM_LOOP"] = "false"  # tests drive the simulation with runner.tick()
 
 import random  # noqa: E402
 from datetime import date  # noqa: E402

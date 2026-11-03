@@ -11,3 +11,6 @@ node_modules/
 dist/
 .vscode/
 .idea/
+# built HMI (produced by `npm run build` / start.py / Docker)
+backend/app/static/
+backend/.hmi-profile/

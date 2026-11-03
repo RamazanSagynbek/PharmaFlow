@@ -37,7 +37,7 @@ manager = ConnectionManager()
 async def websocket_endpoint(ws: WebSocket):
     await manager.connect(ws)
     runner = ws.app.state.runner
-    await ws.send_json({"type": "hello", "snapshot": runner.sim.snapshot(), "running": runner.running})
+    await ws.send_json(runner.state_message(type_="hello"))
     with contextlib.suppress(WebSocketDisconnect):
         while True:
             await ws.receive_text()  # keep-alive; the server pushes ticks
